@@ -2,6 +2,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+export type DataSource = 'ccusage' | 'zai';
+
 export interface AppSettings {
   timezone: string;
   resetHour: number;
@@ -9,6 +11,7 @@ export interface AppSettings {
   customTokenLimit?: number;
   menuBarDisplayMode: 'percentage' | 'cost' | 'alternate';
   menuBarCostSource: 'today' | 'sessionWindow';
+  dataSource: DataSource; // New field to choose between ccusage and z.ai
 }
 
 export class SettingsService {
@@ -31,6 +34,7 @@ export class SettingsService {
       customTokenLimit: undefined,
       menuBarDisplayMode: 'alternate',
       menuBarCostSource: 'today',
+      dataSource: 'ccusage' as DataSource, // Default to ccusage for backward compatibility
     };
 
     // Ensure settings directory exists

@@ -188,3 +188,70 @@ export interface MenuBarData {
   resetInfo?: ResetTimeInfo; // detailed reset information
   sessionTracking?: SessionTracking; // 5-hour rolling session tracking
 }
+
+// ============================================================================
+// z.ai API Types
+// ============================================================================
+
+export interface ZaiQuotaLimit {
+  type: string;
+  unit: number;
+  number: number;
+  usage: number;
+  currentValue: number;
+  remaining: number;
+  percentage: number;
+  nextResetTime?: number;
+}
+
+export interface ZaiQuotaResponse {
+  code: number;
+  msg: string;
+  data: {
+    limits: ZaiQuotaLimit[];
+  };
+  success: boolean;
+}
+
+export interface ZaiModelUsageHourlyData {
+  totalModelCallCount?: number;
+  totalTokensUsage?: number;
+  successRate?: number;
+  avgResponseTime?: number;
+}
+
+export interface ZaiModelUsageResponse {
+  code: number;
+  data: {
+    totalUsage: {
+      totalModelCallCount: number;
+      totalTokensUsage: number;
+    };
+    x_time: string[];
+    [key: string]: ZaiModelUsageHourlyData | number | string[];
+  };
+  success: boolean;
+}
+
+export interface ZaiToolUsageResponse {
+  code: number;
+  data: {
+    [toolName: string]: {
+      callCount: number;
+      tokensUsage?: number;
+    };
+  };
+  success: boolean;
+}
+
+export interface ZaiModelPerformanceResponse {
+  code: number;
+  data: {
+    [modelName: string]: {
+      decodeSpeed?: number;
+      successRate?: number;
+      avgResponseTime?: number;
+    };
+  };
+  success: boolean;
+}

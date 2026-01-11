@@ -4,8 +4,10 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BrowserWindow, Tray, app, ipcMain, nativeImage, screen } from 'electron';
 import { CCUsageService } from './src/services/ccusageService.js';
+import { ZAIService } from './src/services/zaiService.js';
 import { NotificationService } from './src/services/notificationService.js';
 import { SettingsService } from './src/services/settingsService.js';
+import type { DataSource } from './src/services/settingsService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,7 +15,8 @@ const __dirname = path.dirname(__filename);
 class CCSevaApp {
   private tray: Tray | null = null;
   private window: BrowserWindow | null = null;
-  private usageService: CCUsageService;
+  private ccusageService: CCUsageService;
+  private zaiService: ZAIService;
   private notificationService: NotificationService;
   private settingsService: SettingsService;
   private updateInterval: NodeJS.Timeout | null = null;
@@ -22,11 +25,20 @@ class CCSevaApp {
   private cachedMenuBarData: any = null;
   private menuBarDisplayMode: 'percentage' | 'cost' | 'alternate' = 'alternate';
   private menuBarCostSource: 'today' | 'sessionWindow' = 'today';
+  private dataSource: DataSource = 'ccusage';
 
   constructor() {
-    this.usageService = CCUsageService.getInstance();
+    this.ccusageService = CCUsageService.getInstance();
+    this.zaiService = ZAIService.getInstance();
     this.notificationService = NotificationService.getInstance();
     this.settingsService = SettingsService.getInstance();
+  }
+
+  /**
+   * Get the active usage service based on data source setting
+   */
+  private getActiveService() {
+    return this.dataSource === 'zai' ? this.zaiService : this.ccusageService;
   }
 
   async initialize() {
@@ -36,9 +48,15 @@ class CCSevaApp {
     const settings = await this.settingsService.loadSettings();
     this.menuBarDisplayMode = settings.menuBarDisplayMode || 'alternate';
     this.menuBarCostSource = settings.menuBarCostSource || 'today';
+    this.dataSource = settings.dataSource || 'ccusage';
 
     // Apply plan configuration to usage service
-    this.usageService.updateConfiguration({
+    this.ccusageService.updateConfiguration({
+      plan: settings.plan,
+      customTokenLimit: settings.customTokenLimit,
+      menuBarCostSource: settings.menuBarCostSource,
+    });
+    this.zaiService.updateConfiguration({
       plan: settings.plan,
       customTokenLimit: settings.customTokenLimit,
       menuBarCostSource: settings.menuBarCostSource,
@@ -48,7 +66,7 @@ class CCSevaApp {
     this.createWindow();
     this.setupIPC();
     this.startUsagePolling();
-    
+
     // Only start display toggle if mode is 'alternate'
     if (this.menuBarDisplayMode === 'alternate') {
       this.startDisplayToggle();
@@ -83,7 +101,8 @@ class CCSevaApp {
 
   private async updateTrayTitle() {
     try {
-      const menuBarData = await this.usageService.getMenuBarData();
+      const activeService = this.getActiveService();
+      const menuBarData = await activeService.getMenuBarData();
       this.cachedMenuBarData = menuBarData;
 
       // Update tray title based on current display mode
@@ -171,7 +190,8 @@ class CCSevaApp {
   private setupIPC() {
     ipcMain.handle('get-usage-stats', async () => {
       try {
-        return await this.usageService.getUsageStats();
+        const activeService = this.getActiveService();
+        return await activeService.getUsageStats();
       } catch (error) {
         console.error('Error getting usage stats:', error);
         throw error;
@@ -181,7 +201,8 @@ class CCSevaApp {
     ipcMain.handle('refresh-data', async () => {
       try {
         // Clear cache and fetch fresh data
-        const stats = await this.usageService.getUsageStats();
+        const activeService = this.getActiveService();
+        const stats = await activeService.getUsageStats();
         await this.updateTrayTitle();
         return stats;
       } catch (error) {
@@ -217,18 +238,23 @@ class CCSevaApp {
     ipcMain.handle('save-settings', async (_, settings) => {
       try {
         await this.settingsService.saveSettings(settings);
-        
-        // Propagate plan settings to usage service
-        this.usageService.updateConfiguration({
+
+        // Propagate plan settings to usage services
+        this.ccusageService.updateConfiguration({
           plan: settings.plan,
           customTokenLimit: settings.customTokenLimit,
           menuBarCostSource: settings.menuBarCostSource,
         });
-        
+        this.zaiService.updateConfiguration({
+          plan: settings.plan,
+          customTokenLimit: settings.customTokenLimit,
+          menuBarCostSource: settings.menuBarCostSource,
+        });
+
         // Handle menu bar display mode change
         if (settings.menuBarDisplayMode && settings.menuBarDisplayMode !== this.menuBarDisplayMode) {
           this.menuBarDisplayMode = settings.menuBarDisplayMode;
-          
+
           // Stop or start display toggle based on mode
           if (this.menuBarDisplayMode === 'alternate') {
             if (!this.displayInterval) {
@@ -240,7 +266,7 @@ class CCSevaApp {
               this.displayInterval = null;
             }
           }
-          
+
           // Update display immediately
           this.updateTrayDisplay();
         }
@@ -248,6 +274,13 @@ class CCSevaApp {
         // If cost source changed, refresh tray title to pick up new cost
         if (settings.menuBarCostSource && settings.menuBarCostSource !== this.menuBarCostSource) {
           this.menuBarCostSource = settings.menuBarCostSource;
+          await this.updateTrayTitle();
+        }
+
+        // Handle data source change
+        if (settings.dataSource && settings.dataSource !== this.dataSource) {
+          this.dataSource = settings.dataSource;
+          // Clear cache and refresh with new data source
           await this.updateTrayTitle();
         }
 

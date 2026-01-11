@@ -12,6 +12,7 @@ interface SettingsPanelProps {
     customTokenLimit?: number;
     menuBarDisplayMode?: 'percentage' | 'cost' | 'alternate';
     menuBarCostSource?: 'today' | 'sessionWindow';
+    dataSource?: 'ccusage' | 'zai';
   };
   onUpdatePreferences: (preferences: Partial<SettingsPanelProps['preferences']>) => void;
   stats: UsageStats;
@@ -272,6 +273,65 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
                   <div className="text-white/50 text-xs mt-2">
                     When set to Current session window, the menu bar cost reflects the rolling
                     5-hour session window instead of today's total.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Data Source Configuration */}
+          <div className="space-y-3">
+            <div className="flex items-center space-x-3">
+              <span className="text-2xl">🔌</span>
+              <div>
+                <div className="text-white font-medium">Data Source</div>
+                <div className="text-white/60 text-sm">
+                  Choose where CCSeva fetches your Claude usage data
+                </div>
+              </div>
+            </div>
+
+            <div className="ml-11 space-y-3">
+              <div>
+                <div className="text-white/70 text-sm mb-2">Data Source Selection</div>
+                <Select
+                  value={preferences.dataSource || 'ccusage'}
+                  onValueChange={(value: 'ccusage' | 'zai') => handlePreferenceChange('dataSource', value)}
+                >
+                  <SelectTrigger className="w-full bg-white/5 border-white/10 text-white hover:bg-white/10">
+                    <SelectValue placeholder="Select data source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ccusage">Local Files (~/.claude)</SelectItem>
+                    <SelectItem value="zai">z.ai API</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3">
+                <div className="text-purple-300 text-sm">
+                  <span className="text-lg mr-2">💡</span>
+                  {preferences.dataSource === 'zai' ? (
+                    <span>
+                      Using <span className="font-medium">z.ai API</span>. Make sure{' '}
+                      <code className="bg-purple-500/20 px-1 rounded">ANTHROPIC_AUTH_TOKEN</code>{' '}
+                      environment variable is set.
+                    </span>
+                  ) : (
+                    <span>
+                      Using <span className="font-medium">local files</span> from ~/.claude directory.
+                      Requires ccusage package.
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {preferences.dataSource === 'zai' && (
+                <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-3">
+                  <div className="text-yellow-300 text-sm">
+                    <span className="text-lg mr-2">⚠️</span>
+                    <span className="font-medium">Note:</span> z.ai API doesn't provide cost
+                    information. Cost displays will show $0.00.
                   </div>
                 </div>
               )}

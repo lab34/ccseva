@@ -13,11 +13,13 @@ const ModelUsageItem = ({
   modelData,
   totalTokens,
   index,
+  showCost,
 }: {
   modelName: string;
   modelData: { tokens: number; cost: number };
   totalTokens: number;
   index: number;
+  showCost: boolean;
 }) => {
   const percentage = totalTokens > 0 ? (modelData.tokens / totalTokens) * 100 : 0;
   const formatNumber = (num: number) => {
@@ -43,7 +45,8 @@ const ModelUsageItem = ({
               <div className="text-center">
                 <p className="font-semibold">{modelName}</p>
                 <p className="text-sm mt-1">
-                  {formatNumber(modelData.tokens)} tokens • {formatCurrency(modelData.cost)}
+                  {formatNumber(modelData.tokens)} tokens
+                  {showCost && ` • ${formatCurrency(modelData.cost)}`}
                 </p>
                 <p className="text-xs mt-1 text-muted-foreground">
                   {percentage.toFixed(1)}% of today's usage
@@ -75,6 +78,11 @@ const formatCurrency = (amount: number) => {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+};
+
+// Helper to check if cost data is available (z.ai API doesn't provide cost)
+const hasCostData = (stats: UsageStats) => {
+  return stats.today.totalCost > 0 || stats.thisWeek.some((day) => day.totalCost > 0);
 };
 
 // Helper for getting status-related values
@@ -109,9 +117,10 @@ const KeyMetricsRow: React.FC<{
   stats: UsageStats;
 }> = ({ stats }) => {
   const timeRemaining = stats.actualResetInfo?.formattedTimeRemaining || 'No active session';
+  const showCost = hasCostData(stats);
 
   return (
-    <div className="grid grid-cols-3 gap-4 text-center">
+    <div className={`grid ${showCost ? 'grid-cols-3' : 'grid-cols-2'} gap-4 text-center`}>
       <div className="space-y-2">
         <div className="text-2xl font-bold text-neutral-100 font-primary">
           {formatNumber(stats.tokensUsed)}
@@ -122,15 +131,17 @@ const KeyMetricsRow: React.FC<{
         </div>
       </div>
 
-      <div className="space-y-2">
-        <div className="text-2xl font-bold text-neutral-100 font-primary">
-          {formatCurrency(stats.today.totalCost)}
+      {showCost && (
+        <div className="space-y-2">
+          <div className="text-2xl font-bold text-neutral-100 font-primary">
+            {formatCurrency(stats.today.totalCost)}
+          </div>
+          <div className="text-sm text-neutral-warm-400 font-primary">Cost Today</div>
+          <div className="text-xs text-neutral-500 font-primary">
+            {stats.today.totalTokens.toLocaleString()} tokens
+          </div>
         </div>
-        <div className="text-sm text-neutral-warm-400 font-primary">Cost Today</div>
-        <div className="text-xs text-neutral-500 font-primary">
-          {stats.today.totalTokens.toLocaleString()} tokens
-        </div>
-      </div>
+      )}
 
       <div className="space-y-2">
         <div className="text-2xl font-bold text-neutral-100 font-primary">
@@ -227,6 +238,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
   const { getStatusColor, getStatusIcon } = getStatusHelpers(status);
+  const showCost = hasCostData(stats);
 
   return (
     <TooltipProvider>
@@ -448,12 +460,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
                     {stats.today.totalTokens.toLocaleString()}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-400">Cost</span>
-                  <span className="text-white font-medium">
-                    {formatCurrency(stats.today.totalCost)}
-                  </span>
-                </div>
+                {hasCostData(stats) && (
+                  <div className="flex justify-between">
+                    <span className="text-neutral-400">Cost</span>
+                    <span className="text-white font-medium">
+                      {formatCurrency(stats.today.totalCost)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-neutral-400">Models</span>
                   <span className="text-white font-medium">
@@ -490,26 +504,54 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
               </div>
 
               <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-neutral-400">Total Cost</span>
-                  <span className="text-white font-medium">
-                    {formatCurrency(stats.thisWeek.reduce((sum, day) => sum + day.totalCost, 0))}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-400">Total Tokens</span>
-                  <span className="text-white font-medium">
-                    {stats.thisWeek.reduce((sum, day) => sum + day.totalTokens, 0).toLocaleString()}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-neutral-400">Avg Daily</span>
-                  <span className="text-white font-medium">
-                    {formatCurrency(
-                      stats.thisWeek.reduce((sum, day) => sum + day.totalCost, 0) / 7
-                    )}
-                  </span>
-                </div>
+                {hasCostData(stats) ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Total Cost</span>
+                      <span className="text-white font-medium">
+                        {formatCurrency(stats.thisWeek.reduce((sum, day) => sum + day.totalCost, 0))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Total Tokens</span>
+                      <span className="text-white font-medium">
+                        {stats.thisWeek.reduce((sum, day) => sum + day.totalTokens, 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Avg Daily</span>
+                      <span className="text-white font-medium">
+                        {formatCurrency(
+                          stats.thisWeek.reduce((sum, day) => sum + day.totalCost, 0) / 7
+                        )}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Total Tokens</span>
+                      <span className="text-white font-medium">
+                        {stats.thisWeek.reduce((sum, day) => sum + day.totalTokens, 0).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Avg Daily</span>
+                      <span className="text-white font-medium">
+                        {formatNumber(
+                          stats.thisWeek.reduce((sum, day) => sum + day.totalTokens, 0) / 7
+                        )}{' '}
+                        tokens
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-400">Active Days</span>
+                      <span className="text-white font-medium">
+                        {stats.thisWeek.filter((day) => day.totalTokens > 0).length}
+                      </span>
+                    </div>
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -576,6 +618,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ stats, status }) => {
                     modelData={modelData}
                     totalTokens={stats.today.totalTokens}
                     index={index}
+                    showCost={showCost}
                   />
                 ))
               ) : (
